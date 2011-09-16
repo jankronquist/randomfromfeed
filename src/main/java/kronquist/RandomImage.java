@@ -19,6 +19,16 @@ import org.apache.commons.jxpath.xml.DOMParser;
 public class RandomImage extends HttpServlet {
 	public void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
 		PrintWriter writer = response.getWriter();
+		
+		if (request.getParameterMap().isEmpty()) {
+			writer.println("Parameters:");
+			writer.println(" url = the URL of the feed");
+			writer.println(" [entryPath] = xpath of the entries to randomly select between");
+			writer.println(" [linkPath] = xpath of the link of the entry that will be redirected to");
+			writer.println(" [nlast] = limit the selection to this number of entries");
+			writer.println(" [prefernew] = 0.0 to evenly select between all entries, 1.0 to only select the latest entry");
+			return;
+		}
 
 		String url = request.getParameter("url");
 		String entryPath = getParameter(request, "entryPath", "/rss/channel/item");
