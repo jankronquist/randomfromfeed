@@ -18,18 +18,35 @@ import org.apache.commons.jxpath.xml.DOMParser;
  */
 public class RandomImage extends HttpServlet {
 	public void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
+		PrintWriter writer = response.getWriter();
+
 		String url = request.getParameter("url");
 		String entryPath = getParameter(request, "entryPath", "/rss/channel/item");
 		String linkPath = getParameter(request, "linkPath", "enclosure/@url");
-		PrintWriter writer = response.getWriter();
+		
+		int nlatest = getIntParameter(request, "nlast", Integer.MAX_VALUE);
+		double preferNew = getDoubleParameter(request, "prefernew", 0);
+		if (preferNew < 0.0 || preferNew > 1.0) {
+			writer.println("prefernew needs to be greater than or equal to zero (equal preference) up to a maximum of 1.0 (always pick the last picture).");
+			return;
+		}
+
 		try {
-			String result = getRandomLink(url, entryPath, linkPath);
+			String result = getRandomLink(url, entryPath, linkPath, nlatest, preferNew);
 			response.sendRedirect(result);
 		} catch (Exception e) {
 			writer.println(url);
 			writer.println("Error: " + e.getMessage());
 			e.printStackTrace(writer);
 		}
+	}
+
+	private int getIntParameter(HttpServletRequest request, String name, int defaultValue) {
+		return Integer.parseInt(getParameter(request, name, "" + defaultValue));
+	}
+
+	private double getDoubleParameter(HttpServletRequest request, String name, double defaultValue) {
+		return Double.parseDouble(getParameter(request, name, "" + defaultValue));
 	}
 
 	private String getParameter(HttpServletRequest request, String name, String defaultValue) {
@@ -41,25 +58,37 @@ public class RandomImage extends HttpServlet {
 	}
 
 	public static void main(String[] args) throws Exception {
-		System.out.println(getRandomLink(Thread.currentThread().getContextClassLoader().getResourceAsStream("picasa.xml"), "/rss/channel/item", "enclosure/@url"));
+		do {
+			System.out.println(getRandomLink(Thread.currentThread().getContextClassLoader().getResourceAsStream("picasa.xml"), "/rss/channel/item", "enclosure/@url", Integer.MAX_VALUE, 0.9));
+		} while (true);
 	}
 
-	private static String getRandomLink(String feedUrl, String entryPath, String linkPath) throws Exception {
+	private static String getRandomLink(String feedUrl, String entryPath, String linkPath, int nlatest, double preferNew) throws Exception {
 		InputStream inputStream = new URL(feedUrl).openStream();
-		return getRandomLink(inputStream, entryPath, linkPath);
+		return getRandomLink(inputStream, entryPath, linkPath, nlatest, preferNew);
 	}
 
-	private static String getRandomLink(InputStream inputStream, String entryPath, String linkPath) throws IOException {
+	private static String getRandomLink(InputStream inputStream, String entryPath, String linkPath, int nlatest, double preferNew) throws IOException {
 		try {
 			JXPathContext context = JXPathContext.newContext(new DOMParser().parseXML(inputStream));
 			Object value = context.getValue("count("+ entryPath + ")");
 			int count = (int) Double.parseDouble(value.toString());
-			int random = (int) (Math.random()*count) + 1;
+			int random = selectRandom(count, nlatest, preferNew) + 1;
 			Pointer pointer = context.createPath(entryPath + "[" + random + "]");
 			JXPathContext item = JXPathContext.newContext(pointer.getNode());
 			return (String) item.getValue(linkPath);
 		} finally {
 			inputStream.close();
 		}
+	}
+
+	private static int selectRandom(int count, int nlatest, double preferNew) {
+		int nrEntriesSelection = Math.min(nlatest, count);
+		double dblSelection = Math.pow(Math.random(), 1.0 - preferNew);
+		int i = (int) Math.floor(nrEntriesSelection * dblSelection);
+		if (i == nrEntriesSelection) {	// really just in case preferNew = 1.0
+			i = nrEntriesSelection-1;
+		}
+		return (count-nrEntriesSelection) + i;
 	}
 }
